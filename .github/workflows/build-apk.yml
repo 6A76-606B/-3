@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -35,10 +35,13 @@ jobs:
 
       - name: Build icon files
         run: |
+          sudo apt-get update -y
+          sudo apt-get install -y imagemagick
+          if command -v magick >/dev/null 2>&1; then IM="magick"; else IM="convert"; fi
           mkdir -p assets
-          convert icon.png -resize 1024x1024 -background "#6a1f9a" -gravity center -extent 1024x1024 assets/icon-only.png
-          convert icon.png -resize 680x680 -background none -gravity center -extent 1024x1024 assets/icon-foreground.png
-          convert -size 1024x1024 xc:"#6a1f9a" assets/icon-background.png
+          $IM icon.png -resize 1024x1024 -background "#6a1f9a" -gravity center -extent 1024x1024 assets/icon-only.png
+          $IM icon.png -resize 680x680 -background none -gravity center -extent 1024x1024 assets/icon-foreground.png
+          $IM -size 1024x1024 xc:"#6a1f9a" assets/icon-background.png
           npx capacitor-assets generate --android
 
       - name: Sync and build
