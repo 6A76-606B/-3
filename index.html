@@ -71,6 +71,21 @@ input{font-size:16px}
   .bar{font-size:.9rem}
   .box{padding:16px}
 }
+
+.opt{display:block;width:100%;margin:8px 0 0!important;padding:14px;border-radius:14px;font-size:1.05rem;font-weight:700;background:rgba(255,255,255,.18);border:2px solid var(--line)}
+.opt.p.sel{background:var(--ok);border-color:var(--ok)}
+.opt.a.sel{background:var(--no);border-color:var(--no)}
+.lbl{display:block;margin:14px 0 6px;font-size:.9rem;opacity:.9}
+.chrow{display:flex;flex-wrap:wrap;gap:4px}
+.btns .on.ex{background:#f59e0b!important;border-color:#f59e0b!important}
+.badge.ex{background:#f59e0b}
+
+.dnav{display:flex;align-items:center;gap:6px}
+.dnav input{width:auto}
+.nav{padding:6px 14px;font-size:1.2rem;line-height:1;min-height:40px}
+.nav:disabled{opacity:.4}
+#bkText{display:block;width:100%;border:0;border-radius:12px;padding:10px;font-size:14px;direction:ltr;background:rgba(255,255,255,.95);color:#222;resize:vertical}
+.ok{color:#86efac}
 </style>
 </head>
 <body>
@@ -82,12 +97,18 @@ input{font-size:16px}
   <div class="hero"><p>اضغط على "السجل" لعرض الحضور والغياب لكل شخص</p></div>
   <div class="bar">
     <b id="dayLabel"></b>
-    <input type="date" id="date">
+    <div class="dnav">
+      <button id="dPrev" class="nav" aria-label="الأحد السابق">›</button>
+      <input type="date" id="date">
+      <button id="dNext" class="nav" aria-label="الأحد التالي">‹</button>
+    </div>
   </div>
+  <div class="err" id="dateMsg" style="text-align:center;margin:-6px 0 8px"></div>
   <div class="add" id="addBox" hidden>
     <input id="newName" placeholder="اسم جديد">
     <button id="addBtn">إضافة</button>
   </div>
+  <div class="add" id="toolsBox" hidden><button id="bkOpen" style="width:100%">💾 نسخ واستعادة البيانات</button></div>
   <div id="list"></div>
   
 </main>
@@ -100,60 +121,187 @@ input{font-size:16px}
   <button id="loginCancel" style="background:#999">إلغاء</button>
 </div></div>
 
+
+<div class="modal" id="chModal"><div class="box">
+  <h2 id="chTitle"></h2>
+  <button class="opt" id="opt1"></button>
+  <button class="opt" id="opt2"></button>
+  <div id="extraBox" hidden>
+    <label class="lbl" id="leaderLabel">اسم القائد اللي استأذن منه</label>
+    <input id="leaderInput" type="text" placeholder="اسم القائد">
+    <div id="timeBox">
+      <label class="lbl">مشي الساعة كام؟</label>
+      <input id="timeInput" type="time">
+    </div>
+  </div>
+  <div class="err" id="chErr"></div>
+  <div class="chrow">
+    <button id="chSave" onclick="">حفظ</button>
+    <button id="chClear" style="background:#b91c1c">مسح الحالة</button>
+    <button id="chCancel" style="background:#999">إلغاء</button>
+  </div>
+</div></div>
+
+
+<div class="modal" id="bkModal"><div class="box">
+  <h2>نسخ واستعادة البيانات</h2>
+  <p style="font-size:.85rem;opacity:.85;margin-bottom:8px">"نسخ البيانات" بيطلع كل الأسامي والحضور والغياب كنص. احفظه في واتساب أو ملاحظات. للاستعادة الصق النص هنا واضغط "استعادة".</p>
+  <textarea id="bkText" rows="7" placeholder="الصق النسخة الاحتياطية هنا للاستعادة"></textarea>
+  <div class="err" id="bkMsg"></div>
+  <div class="chrow">
+    <button id="bkCopy">نسخ البيانات</button>
+    <button id="bkShare" hidden>مشاركة</button>
+    <button id="bkRestore" style="background:#b45309">استعادة</button>
+    <button id="bkClose" style="background:#999">إغلاق</button>
+  </div>
+</div></div>
+
 <div class="modal" id="recModal"><div class="box">
   <h2 id="recTitle"></h2>
   <ul id="recList"></ul>
   <button id="recClose">إغلاق</button>
 </div></div>
 
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 // ===== إعدادات =====
 const ADMIN_PASS = "312012";
-// لو عايز البيانات تتشارك بين كل الأجهزة: حط إعدادات Firebase هنا (Firestore)
-const FIREBASE_CONFIG = null; // مثال: {apiKey:"...",authDomain:"...",projectId:"..."}
 // ===================
 
 const DEFAULT_NAMES = ["ماركو جورج","مينا إسحاق","يوساب ناجح","بيشوي ميلاد","كاراس ايهاب","كيرلس منتصر","جانو جرجس","كيرلس رأفت","شنودة روماني","بولا هاني","كاراس صديق"];
-let state = {members: DEFAULT_NAMES.map((n,i)=>({id:"m"+(i+1),name:n})), records:{}};
+// الحالات: p = حضر | pe = حضر واستأذن ومشي | a = غايب | ae = غايب واستأذن من قائد
+let state = {members: DEFAULT_NAMES.map((n,i)=>({id:"m"+(i+1),name:n})), records:{}, extra:{}, times:{}};
 let isAdmin = sessionStorage.getItem("adm")==="1";
-let ref = null;
 const $ = id => document.getElementById(id);
 const today = () => { const d=new Date(); return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); };
-let day = today();
+const fmtD = d => d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
+const isSunday = v => new Date(v+"T00:00").getDay()===0;
+const prevSunday = v => { const d=new Date(v+"T00:00"); d.setDate(d.getDate()-d.getDay()); return fmtD(d); };
+let day = prevSunday(today());
+let pending = null; // {m, type}
+
+const isP = v => v==="p" || v==="pe";
+const isA = v => v==="a" || v==="ae";
 
 function save(){
   try{ localStorage.setItem("att_state", JSON.stringify(state)); }catch(e){}
-  if(ref) ref.set(state).catch(()=>{});
 }
 function load(){
   try{ const s=localStorage.getItem("att_state"); if(s) state=JSON.parse(s); }catch(e){}
-  if(FIREBASE_CONFIG && window.firebase){
-    firebase.initializeApp(FIREBASE_CONFIG);
-    ref = firebase.firestore().collection("attendance").doc("data");
-    ref.onSnapshot(s=>{ if(s.exists){ state=s.data(); state.records=state.records||{}; render(); } else { ref.set(state); } });
-  }
+  state.records = state.records || {};
+  state.extra = state.extra || {};
+  state.times = state.times || {};
+  // ترحيل بيانات قديمة: وقت المشي كان متخزن في extra
+  Object.keys(state.records).forEach(d=>{
+    Object.keys(state.records[d]).forEach(id=>{
+      if(state.records[d][id]==="pe"){
+        const x=(state.extra[d]||{})[id];
+        if(x && /^\d{1,2}:\d{2}$/.test(x)){
+          state.times[d]=state.times[d]||{}; state.times[d][id]=x;
+          delete state.extra[d][id];
+        }
+      }
+    });
+  });
+  state.members = state.members || [];
+}
+function getExtra(d,id){ return (state.extra[d]||{})[id] || ""; }
+function setExtra(d,id,t){
+  if(t){ state.extra[d] = state.extra[d]||{}; state.extra[d][id] = t; }
+  else if(state.extra[d]){ delete state.extra[d][id]; if(!Object.keys(state.extra[d]).length) delete state.extra[d]; }
+}
+function getTime(d,id){ return (state.times[d]||{})[id] || ""; }
+function setTime(d,id,t){
+  if(t){ state.times[d] = state.times[d]||{}; state.times[d][id] = t; }
+  else if(state.times[d]){ delete state.times[d][id]; if(!Object.keys(state.times[d]).length) delete state.times[d]; }
+}
+function fmtTime(t){
+  if(!t) return "";
+  const [h,m] = t.split(":").map(Number);
+  return (h%12||12)+":"+String(m).padStart(2,"0")+" "+(h>=12?"م":"ص");
+}
+function statusText(d,id,v){
+  const x = getExtra(d,id), t = getTime(d,id);
+  if(v==="p") return "حضر";
+  if(v==="pe") return "حضر واستأذن" + (x ? " من القائد "+x : "") + (t ? " ومشي الساعة "+fmtTime(t) : " ومشي");
+  if(v==="a") return "غايب";
+  if(v==="ae") return "غايب واستأذن من القائد" + (x ? ": "+x : "");
+  return "";
 }
 function absences(id){
-  return Object.keys(state.records).filter(d=>state.records[d][id]==="a").sort().reverse();
+  return Object.keys(state.records).filter(d=>isA(state.records[d][id])).sort().reverse();
 }
 function lastStatus(id){
   const ds=Object.keys(state.records).filter(d=>state.records[d][id]).sort();
   return ds.length ? state.records[ds[ds.length-1]][id] : null;
 }
-function setStatus(id,v){
+function setStatus(id,v,extra,time){
   if(!isAdmin) return;
   state.records[day] = state.records[day]||{};
-  state.records[day][id] = state.records[day][id]===v ? undefined : v;
-  if(state.records[day][id]===undefined) delete state.records[day][id];
+  state.records[day][id] = v;
+  setExtra(day,id,extra||"");
+  setTime(day,id,time||"");
   save(); render();
 }
+function clearStatus(id){
+  if(!isAdmin) return;
+  if(state.records[day]){
+    delete state.records[day][id];
+    if(!Object.keys(state.records[day]).length) delete state.records[day];
+  }
+  setExtra(day,id,"");
+  setTime(day,id,"");
+  save(); render();
+}
+
+/* ===== نافذة الاختيار ===== */
+function openChoice(m,type){
+  pending = {m,type};
+  const cur = (state.records[day]||{})[m.id];
+  const base = type, exc = type+"e";
+  $("chTitle").textContent = m.name;
+  $("opt1").textContent = type==="p" ? "حضر" : "غايب";
+  $("opt2").textContent = type==="p" ? "استأذن ومشي" : "استأذن من قائد";
+  $("opt1").className = "opt " + type + (cur===base ? " sel" : "");
+  $("opt2").className = "opt " + type + (cur===exc ? " sel" : "");
+  $("extraBox").hidden = true;
+  $("chErr").textContent = "";
+  $("chClear").hidden = !cur;
+  $("chModal").classList.add("show");
+}
+function closeChoice(){ $("chModal").classList.remove("show"); pending = null; }
+$("opt1").onclick = () => { if(!pending) return; setStatus(pending.m.id, pending.type, "", ""); closeChoice(); };
+$("opt2").onclick = () => {
+  if(!pending) return;
+  const isPresent = pending.type==="p";
+  const cur = (state.records[day]||{})[pending.m.id];
+  const same = cur===pending.type+"e";
+  $("timeBox").hidden = !isPresent;
+  $("leaderInput").value = same ? getExtra(day,pending.m.id) : "";
+  $("timeInput").value = same ? getTime(day,pending.m.id) : "";
+  $("chErr").textContent = "";
+  $("extraBox").hidden = false;
+  $("leaderInput").focus();
+};
+$("chSave").onclick = () => {
+  if(!pending) return;
+  const name = $("leaderInput").value.trim();
+  const time = $("timeInput").value;
+  if(!name){ $("chErr").textContent = "اكتب اسم القائد"; return; }
+  if(pending.type==="p" && !time){ $("chErr").textContent = "اكتب وقت المشي"; return; }
+  setStatus(pending.m.id, pending.type+"e", name, pending.type==="p" ? time : "");
+  closeChoice();
+};
+$("chClear").onclick = () => { if(pending){ clearStatus(pending.m.id); closeChoice(); } };
+$("chCancel").onclick = closeChoice;
+
+/* ===== العرض ===== */
 function render(){
   $("adminBtn").textContent = isAdmin ? "خروج الأدمن" : "دخول كأدمن";
   $("addBox").hidden = !isAdmin;
   $("date").value = day;
   $("date").disabled = !isAdmin;
+  $("dPrev").disabled = !isAdmin; $("dNext").disabled = !isAdmin;
+  $("toolsBox").hidden = !isAdmin;
   $("dayLabel").textContent = new Date(day+"T00:00").toLocaleDateString("ar-EG",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
   const rec = state.records[day]||{};
   $("list").innerHTML = "";
@@ -164,23 +312,28 @@ function render(){
     row.querySelector(".av").textContent = m.name.trim().charAt(0);
     row.querySelector(".av").hidden = !isAdmin;
     const nm = row.querySelector(".name");
-    nm.innerHTML = '<span></span>'+(isAdmin?'<small>غياب: '+n+'</small>':'');
+    nm.innerHTML = '<span></span>'+(isAdmin?'<small></small>':'');
     nm.firstChild.textContent = m.name;
+    if(isAdmin){
+      nm.querySelector("small").textContent = "غياب: "+n + (st ? "  •  " + statusText(day,m.id,st) : "");
+    }
     nm.onclick = () => showRecord(m);
     const b = row.querySelector(".btns"); if(isAdmin) b.classList.add("adm");
     const rb=document.createElement("button"); rb.textContent="السجل"; rb.onclick=()=>showRecord(m); b.appendChild(rb);
     if(isAdmin){
       [["p","حضر"],["a","غايب"]].forEach(([v,t])=>{
         const x=document.createElement("button"); x.textContent=t;
-        if(st===v) x.className="on "+v;
-        x.onclick=()=>setStatus(m.id,v); b.appendChild(x);
+        const on = v==="p" ? isP(st) : isA(st);
+        if(on) x.className = "on "+v+(st.length===2 ? " ex" : "");
+        x.onclick=()=>openChoice(m,v); b.appendChild(x);
       });
       const d=document.createElement("button"); d.className="del"; d.textContent="🗑";
       d.onclick=()=>{ if(isAdmin && confirm("حذف "+m.name+"؟")){ state.members=state.members.filter(z=>z.id!==m.id); save(); render(); } };
       b.appendChild(d);
     } else {
       const ls=lastStatus(m.id), s=document.createElement("span");
-      s.className="badge "+(ls||"n"); s.classList.add("circ"); s.textContent = ls==="p"?"✓":ls==="a"?"✗":"";
+      s.className="badge circ "+(ls ? (ls.length===2 ? "ex" : ls) : "n");
+      s.textContent = isP(ls)?"✓":isA(ls)?"✗":"";
       b.appendChild(s);
     }
     $("list").appendChild(row);
@@ -189,16 +342,20 @@ function render(){
 function showRecord(m){
   $("recTitle").textContent = "سجل: "+m.name;
   const ds = Object.keys(state.records).filter(d=>state.records[d][m.id]).sort().reverse();
-  const pc = ds.filter(d=>state.records[d][m.id]==="p").length, ac = ds.length-pc;
+  const cnt = {p:0,pe:0,a:0,ae:0};
+  ds.forEach(d=>{ cnt[state.records[d][m.id]]++; });
   const ul=$("recList"); ul.innerHTML="";
   const sum=document.createElement("li"); sum.style.fontWeight="700";
-  sum.textContent = "حضر: "+pc+"  |  غاب: "+ac; ul.appendChild(sum);
+  sum.textContent = "حضر: "+cnt.p+"  |  حضر واستأذن: "+cnt.pe+"  |  غاب: "+cnt.a+"  |  غاب واستأذن: "+cnt.ae;
+  ul.appendChild(sum);
   if(!ds.length){ const li=document.createElement("li"); li.textContent="لا يوجد سجل بعد"; ul.appendChild(li); }
   ds.forEach(d=>{
-    const ok = state.records[d][m.id]==="p", li=document.createElement("li");
-    li.style.display="flex"; li.style.justifyContent="space-between";
+    const v = state.records[d][m.id], li=document.createElement("li");
+    li.style.display="flex"; li.style.justifyContent="space-between"; li.style.flexWrap="wrap"; li.style.gap="4px 10px";
     const t=document.createElement("span"); t.textContent=new Date(d+"T00:00").toLocaleDateString("ar-EG",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
-    const r=document.createElement("b"); r.textContent = ok?"✓ حضر":"✗ غايب"; r.style.color = ok?"#4ade80":"#f87171";
+    const r=document.createElement("b");
+    r.textContent = (isP(v) ? "✓ " : "✗ ") + statusText(d,m.id,v);
+    r.style.color = v==="p" ? "#4ade80" : v==="a" ? "#f87171" : "#fbbf24";
     li.appendChild(t); li.appendChild(r); ul.appendChild(li);
   });
   $("recModal").classList.add("show");
@@ -220,7 +377,53 @@ $("addBtn").onclick=()=>{
   const v=$("newName").value.trim(); if(!v) return;
   state.members.push({id:"m"+Date.now(),name:v}); $("newName").value=""; save(); render();
 };
-$("date").onchange=e=>{ day=e.target.value||today(); render(); };
+let msgT = null;
+function dateMsg(t){ $("dateMsg").textContent=t; clearTimeout(msgT); msgT=setTimeout(()=>{$("dateMsg").textContent="";},3500); }
+$("date").onchange=e=>{
+  const v=e.target.value;
+  if(!v){ day=prevSunday(today()); }
+  else if(!isSunday(v)){ day=prevSunday(v); dateMsg("المسموح بس أيام الأحد، اتحول لأقرب أحد قبله"); }
+  else day=v;
+  render();
+};
+function stepSunday(n){ const d=new Date(day+"T00:00"); d.setDate(d.getDate()+7*n); day=fmtD(d); render(); }
+$("dPrev").onclick=()=>stepSunday(-1);
+$("dNext").onclick=()=>stepSunday(1);
+
+/* ===== نسخ واستعادة ===== */
+function bkMsg(t,ok){ const m=$("bkMsg"); m.textContent=t; m.className="err"+(ok?" ok":""); }
+function copyText(t){
+  const ta=$("bkText");
+  const fallback=()=>{ try{ ta.focus(); ta.select(); ta.setSelectionRange(0,t.length); return document.execCommand("copy"); }catch(e){ return false; } };
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    return navigator.clipboard.writeText(t).then(()=>true).catch(()=>fallback());
+  }
+  return Promise.resolve(fallback());
+}
+$("bkOpen").onclick=()=>{ if(!isAdmin) return; $("bkText").value=""; bkMsg(""); $("bkShare").hidden=!navigator.share; $("bkModal").classList.add("show"); };
+$("bkClose").onclick=()=>$("bkModal").classList.remove("show");
+$("bkCopy").onclick=async()=>{
+  const t=JSON.stringify({app:"attendance",version:1,exported:new Date().toISOString(),members:state.members,records:state.records,extra:state.extra,times:state.times});
+  $("bkText").value=t;
+  const ok=await copyText(t);
+  bkMsg(ok?"تم النسخ ✓ الصقه في مكان آمن":"النص ظهر فوق، انسخه يدويًا", ok);
+};
+$("bkShare").onclick=()=>{
+  const t=JSON.stringify({app:"attendance",version:1,exported:new Date().toISOString(),members:state.members,records:state.records,extra:state.extra,times:state.times});
+  $("bkText").value=t;
+  navigator.share({title:"نسخة احتياطية - الحضور والغياب",text:t}).catch(()=>{});
+};
+$("bkRestore").onclick=()=>{
+  if(!isAdmin) return;
+  let o;
+  try{ o=JSON.parse($("bkText").value.trim()); }catch(e){ bkMsg("النص مش صحيح، اتأكد إنك لصقت النسخة كاملة"); return; }
+  const okMembers = o && Array.isArray(o.members) && o.members.every(m=>m && typeof m.id==="string" && typeof m.name==="string");
+  if(!okMembers || !o.records || typeof o.records!=="object"){ bkMsg("دي مش نسخة احتياطية صحيحة"); return; }
+  if(!confirm("هيتم استبدال كل البيانات الحالية (الأسامي والحضور) بالنسخة دي. متأكد؟")) return;
+  state = {members:o.members, records:o.records, extra:o.extra||{}, times:o.times||{}};
+  save(); load(); render();
+  bkMsg("تمت الاستعادة ✓",true);
+};
 load(); render();
 </script>
 </body>
