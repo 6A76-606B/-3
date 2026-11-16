@@ -1,4 +1,4 @@
-name: Build APK
+herename: Build APK
 
 on:
   workflow_dispatch:
@@ -28,21 +28,26 @@ jobs:
       - name: Create Capacitor project
         run: |
           npm init -y
-          npm i @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6
+          npm i @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor/filesystem@6 @capacitor/share@6
           npm i -D @capacitor/assets
           npx cap init "الحضور والغياب" com.attendance.app --web-dir www
           npx cap add android
 
       - name: Build icon files
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y imagemagick
-          if command -v magick >/dev/null 2>&1; then IM="magick"; else IM="convert"; fi
-          mkdir -p assets
-          $IM icon.png -resize 1024x1024 -background "#6a1f9a" -gravity center -extent 1024x1024 assets/icon-only.png
-          $IM icon.png -resize 680x680 -background none -gravity center -extent 1024x1024 assets/icon-foreground.png
-          $IM -size 1024x1024 xc:"#6a1f9a" assets/icon-background.png
-          npx capacitor-assets generate --android
+          ICON=$(ls icon.png icon.jpg icon.jpeg IMG-*.jpg 2>/dev/null | head -1 || true)
+          if [ -z "$ICON" ]; then
+            echo "No icon file found, using the default Capacitor icon"
+          else
+            sudo apt-get update -y
+            sudo apt-get install -y imagemagick
+            if command -v magick >/dev/null 2>&1; then IM="magick"; else IM="convert"; fi
+            mkdir -p assets
+            $IM "$ICON" -resize 1024x1024 -background "#6a1f9a" -gravity center -extent 1024x1024 assets/icon-only.png
+            $IM "$ICON" -resize 680x680 -background none -gravity center -extent 1024x1024 assets/icon-foreground.png
+            $IM -size 1024x1024 xc:"#6a1f9a" assets/icon-background.png
+            npx capacitor-assets generate --android
+          fi
 
       - name: Sync and build
         run: |
