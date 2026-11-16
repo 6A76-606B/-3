@@ -28,10 +28,11 @@ jobs:
       - name: Create Capacitor project
         run: |
           npm init -y
-          npm i @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor/filesystem@6 @capacitor/share@6
+          npm i @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor/filesystem@6 @capacitor/share@6 @capacitor/local-notifications@6
           npm i -D @capacitor/assets
           npx cap init "الحضور والغياب" com.attendance.app --web-dir www
           npx cap add android
+          sed -i 's#</manifest>#<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/><uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM"/><uses-permission android:name="android.permission.USE_EXACT_ALARM"/><uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/><uses-permission android:name="android.permission.VIBRATE"/></manifest>#' android/app/src/main/AndroidManifest.xml
 
       - name: Build icon files
         run: |
@@ -46,6 +47,8 @@ jobs:
             $IM "$ICON" -resize 1024x1024 -background "#6a1f9a" -gravity center -extent 1024x1024 assets/icon-only.png
             $IM "$ICON" -resize 680x680 -background none -gravity center -extent 1024x1024 assets/icon-foreground.png
             $IM -size 1024x1024 xc:"#6a1f9a" assets/icon-background.png
+            $IM -size 2732x2732 xc:"#3c0f5c" \( "$ICON" -resize 900x900 \) -gravity center -composite assets/splash.png
+            cp assets/splash.png assets/splash-dark.png
             npx capacitor-assets generate --android
           fi
 
