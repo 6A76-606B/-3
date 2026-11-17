@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1003201817635",
+    "project_id": "tale3a-3",
+    "storage_bucket": "tale3a-3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1003201817635:android:f8c3b9b00e748b726f1596",
+        "android_client_info": {
+          "package_name": "Com.Dama.Tale3a_3"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyARVN8d6orzuNvF8comMhurpztuunqfLpI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1003201817635:android:8e2923b6c0f7c2b26f1596",
+        "android_client_info": {
+          "package_name": "com.attendance.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyARVN8d6orzuNvF8comMhurpztuunqfLpI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
